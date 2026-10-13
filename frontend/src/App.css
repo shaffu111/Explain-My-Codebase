@@ -34,6 +34,7 @@ button:hover {
 }
 
 .navbar h1 {
+  background: #ed0722;      
   margin: 0;
   font-size: 25px;
 }
