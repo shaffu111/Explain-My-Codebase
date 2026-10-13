@@ -43,12 +43,16 @@ public class ProjectService {
         return projectRepository.save(existingProject);
     }
 
-    public void deleteProject(Long id) {
 
-        if (!projectRepository.existsById(id)) {
-            throw new RuntimeException("Project not found");
-        }
-
-        projectRepository.deleteById(id);
+public void deleteProject(Long id) {
+    if (!projectRepository.existsById(id)) {
+        throw new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.NOT_FOUND,
+            "Project not found"
+        );
     }
+
+    projectRepository.deleteById(id);
+}
+
 }
