@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 import "./App.css";
@@ -18,6 +19,7 @@ function App() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [deletingProjectId, setDeletingProjectId] = useState(null);
 
   useEffect(() => {
     loadProjects();
@@ -28,7 +30,8 @@ function App() {
       const response = await axios.get(`${API}/projects`);
       setProjects(response.data);
     } catch (error) {
-      console.error(error);
+      console.error("Failed to load projects:", error);
+      setMessage("Failed to load projects");
     }
   };
 
@@ -47,9 +50,56 @@ function App() {
       setName("");
       setDescription("");
       setMessage("Project created successfully");
-      loadProjects();
+      await loadProjects();
     } catch (error) {
+      console.error("Failed to create project:", error);
       setMessage("Failed to create project");
+    }
+  };
+
+  // Delete a project
+  const handleDeleteProject = async (project) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${project.name}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingProjectId(project.id);
+    setMessage("");
+
+    try {
+      await axios.delete(`${API}/projects/${project.id}`);
+
+      setProjects((previousProjects) =>
+        previousProjects.filter(
+          (item) => item.id !== project.id
+        )
+      );
+
+      if (selectedProject?.id === project.id) {
+        setSelectedProject(null);
+        setAnalysis([]);
+        setDependencies({});
+        setSearch("");
+        setSearchResults([]);
+      }
+
+      setMessage("Project deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+
+      setMessage(
+        error.response?.status === 404
+          ? "Project not found. Refreshing project list..."
+          : "Failed to delete project. Please try again."
+      );
+
+      if (error.response?.status === 404) {
+        await loadProjects();
+      }
+    } finally {
+      setDeletingProjectId(null);
     }
   };
 
@@ -57,22 +107,30 @@ function App() {
     setSelectedProject(project);
     setLoading(true);
     setMessage("");
+    setAnalysis([]);
+    setDependencies({});
+    setSearch("");
+    setSearchResults([]);
 
     try {
       const [analysisResponse, dependencyResponse] =
         await Promise.all([
-          axios.get(`${API}/projects/${project.id}/java-analysis`),
-          axios.get(`${API}/projects/${project.id}/dependencies`),
+          axios.get(
+            `${API}/projects/${project.id}/java-analysis`
+          ),
+          axios.get(
+            `${API}/projects/${project.id}/dependencies`
+          ),
         ]);
 
       setAnalysis(analysisResponse.data);
       setDependencies(dependencyResponse.data);
     } catch (error) {
-      console.error(error);
+      console.error("Failed to load project analysis:", error);
       setMessage("Could not load project analysis");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const uploadProject = async (event) => {
@@ -92,11 +150,13 @@ function App() {
       );
 
       setMessage("Project uploaded successfully");
-
-      openProject(selectedProject);
+      await openProject(selectedProject);
     } catch (error) {
-      console.error(error);
+      console.error("Upload failed:", error);
       setMessage("Upload failed");
+    } finally {
+      // Allows selecting the same ZIP file again.
+      event.target.value = "";
     }
   };
 
@@ -115,7 +175,8 @@ function App() {
 
       setSearchResults(response.data);
     } catch (error) {
-      console.error(error);
+      console.error("Search failed:", error);
+      setMessage("Code search failed");
     }
   };
 
@@ -130,7 +191,6 @@ function App() {
 
   return (
     <div className="app">
-
       <header className="navbar">
         <div>
           <h1>Explain My Codebase</h1>
@@ -139,9 +199,7 @@ function App() {
       </header>
 
       {!selectedProject ? (
-
         <main className="dashboard">
-
           <section className="create-card">
             <h2>Create Project</h2>
 
@@ -172,10 +230,8 @@ function App() {
               <p>No projects created yet.</p>
             ) : (
               <div className="project-grid">
-
                 {projects.map((project) => (
                   <div className="project-card" key={project.id}>
-
                     <h3>{project.name}</h3>
 
                     <p>
@@ -183,25 +239,36 @@ function App() {
                         "No description provided"}
                     </p>
 
-                    <button
-                      onClick={() => openProject(project)}
-                    >
-                      Open Project
-                    </button>
+                    <div className="project-actions">
+                      <button
+                        onClick={() => openProject(project)}
+                      >
+                        Open Project
+                      </button>
 
+                      <button
+                        type="button"
+                        className="delete-button"
+                        disabled={
+                          deletingProjectId === project.id
+                        }
+                        onClick={() =>
+                          handleDeleteProject(project)
+                        }
+                      >
+                        {deletingProjectId === project.id
+                          ? "Deleting..."
+                          : "Delete Project"}
+                      </button>
+                    </div>
                   </div>
                 ))}
-
               </div>
             )}
           </section>
-
         </main>
-
       ) : (
-
         <main className="analysis-page">
-
           <button className="back-button" onClick={goBack}>
             ← Back to Projects
           </button>
@@ -223,19 +290,15 @@ function App() {
             </label>
           </div>
 
-          {message && (
-            <p className="message">{message}</p>
-          )}
+          {message && <p className="message">{message}</p>}
 
           {loading ? (
             <div className="loading">
               Loading project analysis...
             </div>
           ) : (
-
             <>
               <section className="stats">
-
                 <div className="stat-card">
                   <span>Java Files</span>
                   <strong>{analysis.length}</strong>
@@ -246,7 +309,7 @@ function App() {
                   <strong>
                     {analysis.reduce(
                       (total, file) =>
-                        total + file.classes.length,
+                        total + (file.classes?.length || 0),
                       0
                     )}
                   </strong>
@@ -258,9 +321,9 @@ function App() {
                     {analysis.reduce(
                       (total, file) =>
                         total +
-                        file.classes.reduce(
+                        (file.classes || []).reduce(
                           (count, cls) =>
-                            count + cls.methods.length,
+                            count + (cls.methods?.length || 0),
                           0
                         ),
                       0
@@ -271,18 +334,14 @@ function App() {
                 <div className="stat-card">
                   <span>Files with Dependencies</span>
                   <strong>
-                    {
-                      Object.values(dependencies).filter(
-                        (items) => items.length > 0
-                      ).length
-                    }
+                    {Object.values(dependencies).filter(
+                      (items) => items.length > 0
+                    ).length}
                   </strong>
                 </div>
-
               </section>
 
               <section className="search-section">
-
                 <h2>Search Codebase</h2>
 
                 <div className="search-box">
@@ -290,9 +349,7 @@ function App() {
                     type="text"
                     placeholder="Search class or method..."
                     value={search}
-                    onChange={(e) =>
-                      setSearch(e.target.value)
-                    }
+                    onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         performSearch();
@@ -307,123 +364,98 @@ function App() {
 
                 {searchResults.length > 0 && (
                   <div className="search-results">
-
                     {searchResults.map((result, index) => (
-                      <div
-                        className="result"
-                        key={index}
-                      >
+                      <div className="result" key={index}>
                         {result}
                       </div>
                     ))}
-
                   </div>
                 )}
-
               </section>
 
               <section className="analysis-section">
-
                 <h2>Java Code Analysis</h2>
 
                 {analysis.map((file, index) => (
-
                   <div className="file-card" key={index}>
-
-                    <h3>{file.classes[0]?.name || "Java File"}</h3>
+                    <h3>
+                      {file.classes?.[0]?.name || "Java File"}
+                    </h3>
 
                     <p className="package">
                       Package: {file.packageName || "default"}
                     </p>
 
-                    {file.classes.map((cls, classIndex) => (
+                    {(file.classes || []).map(
+                      (cls, classIndex) => (
+                        <div
+                          className="class-info"
+                          key={classIndex}
+                        >
+                          <div className="info-block">
+                            <h4>Fields</h4>
 
-                      <div
-                        className="class-info"
-                        key={classIndex}
-                      >
+                            {cls.fields.length === 0 ? (
+                              <p>None</p>
+                            ) : (
+                              cls.fields.map((field, i) => (
+                                <div className="item" key={i}>
+                                  {field.modifiers.join(" ")}{" "}
+                                  {field.type} {field.name}
+                                </div>
+                              ))
+                            )}
+                          </div>
 
-                        <div className="info-block">
-                          <h4>Fields</h4>
+                          <div className="info-block">
+                            <h4>Constructors</h4>
 
-                          {cls.fields.length === 0 ? (
-                            <p>None</p>
-                          ) : (
-                            cls.fields.map((field, i) => (
-                              <div className="item" key={i}>
-                                {field.modifiers.join(" ")}{" "}
-                                {field.type} {field.name}
-                              </div>
-                            ))
-                          )}
-                        </div>
+                            {cls.constructors.length === 0 ? (
+                              <p>None</p>
+                            ) : (
+                              cls.constructors.map(
+                                (constructor, i) => (
+                                  <div className="item" key={i}>
+                                    {constructor.name}(
+                                    {constructor.parameters.join(
+                                      ", "
+                                    )}
+                                    )
+                                  </div>
+                                )
+                              )
+                            )}
+                          </div>
 
-                        <div className="info-block">
-                          <h4>Constructors</h4>
+                          <div className="info-block">
+                            <h4>Methods</h4>
 
-                          {cls.constructors.length === 0 ? (
-                            <p>None</p>
-                          ) : (
-                            cls.constructors.map(
-                              (constructor, i) => (
-                                <div
-                                  className="item"
-                                  key={i}
-                                >
-                                  {constructor.name}(
-                                  {constructor.parameters.join(
-                                    ", "
-                                  )}
+                            {cls.methods.length === 0 ? (
+                              <p>None</p>
+                            ) : (
+                              cls.methods.map((method, i) => (
+                                <div className="item" key={i}>
+                                  {method.modifiers.join(" ")}{" "}
+                                  {method.returnType}{" "}
+                                  <strong>{method.name}</strong>(
+                                  {method.parameters.join(", ")}
                                   )
                                 </div>
-                              )
-                            )
-                          )}
+                              ))
+                            )}
+                          </div>
                         </div>
-
-                        <div className="info-block">
-                          <h4>Methods</h4>
-
-                          {cls.methods.length === 0 ? (
-                            <p>None</p>
-                          ) : (
-                            cls.methods.map((method, i) => (
-                              <div
-                                className="item"
-                                key={i}
-                              >
-                                {method.modifiers.join(" ")}{" "}
-                                {method.returnType}{" "}
-                                <strong>
-                                  {method.name}
-                                </strong>
-                                (
-                                {method.parameters.join(
-                                  ", "
-                                )}
-                                )
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                      </div>
-
-                    ))}
-
+                      )
+                    )}
                   </div>
-
                 ))}
-
               </section>
 
               <section className="dependency-section">
-
                 <h2>Dependencies</h2>
 
                 {Object.entries(dependencies).map(
                   ([file, imports]) => (
-
                     <div
                       className="dependency-card"
                       key={file}
@@ -434,25 +466,17 @@ function App() {
                         <span>No imports</span>
                       ) : (
                         imports.map((item, index) => (
-                          <span key={index}>
-                            {item}
-                          </span>
+                          <span key={index}>{item}</span>
                         ))
                       )}
                     </div>
-
                   )
                 )}
-
               </section>
-
             </>
           )}
-
         </main>
-
       )}
-
     </div>
   );
 }
