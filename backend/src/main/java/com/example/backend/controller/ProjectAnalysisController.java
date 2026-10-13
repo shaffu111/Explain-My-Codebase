@@ -12,7 +12,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {
+    "http://localhost:5173",
+    "https://explain-my-codebase-jet.vercel.app"
+})
 public class ProjectAnalysisController {
 
     private final ProjectFileScanner projectFileScanner;

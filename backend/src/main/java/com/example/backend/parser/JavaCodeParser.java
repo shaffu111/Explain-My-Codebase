@@ -268,9 +268,6 @@ public class JavaCodeParser {
         }
     }
 
-    // =========================================================
-    // Field
-    // =========================================================
 
     public static class FieldAnalysis {
 
@@ -302,10 +299,7 @@ public class JavaCodeParser {
         }
     }
 
-    // =========================================================
-    // Constructor
-    // =========================================================
-
+    
     public static class ConstructorAnalysis {
 
         private String name;
@@ -330,9 +324,7 @@ public class JavaCodeParser {
         }
     }
 
-    // =========================================================
-    // Method
-    // =========================================================
+    
 
     public static class MethodAnalysis {
 
