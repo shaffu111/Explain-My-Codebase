@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import "./App.css";
 
-const API = "http://localhost:8080/api";
+const API = "https://explain-my-codebase-arob.onrender.com/api";
 
 function App() {
   const [projects, setProjects] = useState([]);
